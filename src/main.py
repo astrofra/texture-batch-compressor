@@ -25,20 +25,43 @@ def make_tmp_folder():
 
 def optimize_as_indexed_colors(file, input_path, output_path):
 	variants = []
-	# image magick
-	for quant in ["SRGB", "YUV"]:
-		for colors in [8, 16, 32, 64, 128, 256]:
-			for dither in ["FloydSteinberg", "Riemersma"]: # , "None"
-				_opt = [{'key': 'quantize', 'value': quant}, {'key':'dither', 'value': dither}, {'key': 'colors', 'value': colors}]
-				variants.append(optimize_image_as_im_png(file, input_path, output_path, options=_opt))
+	# # image magick
+	# for quant in ["SRGB", "YUV"]:
+	# 	for colors in [8, 16, 32, 64, 128, 256]:
+	# 		for dither in ["FloydSteinberg", "Riemersma"]: # , "None"
+	# 			_opt = [{'key': 'quantize', 'value': quant}, {'key':'dither', 'value': dither}, {'key': 'colors', 'value': colors}]
+	# 			variants.append(optimize_image_as_im_png(file, input_path, output_path, options=_opt))
+
+	# mozjpeg
+	for quality in [50, 60, 70, 80, 90]:
+		_opt = [{'key': 'quality', 'value': quality}]
+		variants.append(optimize_image_as_mozilla_jpeg(file, input_path, output_path, options=_opt))
 
 	# pngquant
 	for colors in [8, 16, 32, 64, 128, 256]:
-		for dither in [0.5, 0.75, 1.0]:
+		for dither in [0.5, 0.9]:
 			_opt = [{'key': 'speed', 'value': 1}, {'key': 'strip', 'value': None}, {'key': 'floyd=', 'value': dither}, {'key': '.colors', 'value': colors}]
 			variants.append(optimize_image_as_quant_png(file, input_path, output_path, options=_opt))
 
 	return variants
+
+def optimize_image_as_mozilla_jpeg(file, input_path, output_path, options = []):
+	options_str = '' # '-quantize YUV -dither FloydSteinberg -colors 32'
+	for opt in options:
+		if opt['value'] is not None:
+			options_str += '-' + str(opt['key']) + ' ' + str(opt['value']) + ' '
+
+	options_str = options_str.strip(' ')
+	print('mozjpeg.exe ' + options_str)
+
+	srcfile = os.path.join(input_path, file)
+	options_as_filename = options_str.replace('-','_').replace(' ','_').replace('__','_').lower()
+	tempfile = os.path.join(output_path, file.split('.')[0] + options_as_filename + '.' + 'tga')
+	destfile = os.path.join(output_path, file.split('.')[0] + options_as_filename + '.' + 'jpg')
+	result = os.popen('..\\bin\\imagemagick\\convert.exe' + ' "' + srcfile + '" ' + '"' + tempfile + '"').read()
+	result = os.popen('..\\bin\\mozjpeg\\cjpeg.exe' + ' ' + options_str + ' -outfile "' + destfile + '" "' + tempfile + '"').read()
+
+	return destfile
 
 
 def optimize_image_as_im_png(file, input_path, output_path, options = []):
@@ -48,7 +71,7 @@ def optimize_image_as_im_png(file, input_path, output_path, options = []):
 			options_str += '-' + str(opt['key']) + ' ' + str(opt['value']) + ' '
 
 	options_str = options_str.strip(' ')
-	print(options_str)
+	print('imagemagick.exe ' + options_str)
 
 	srcfile = os.path.join(input_path, file)
 	options_as_filename = options_str.replace('-','_').replace(' ','_').replace('__','_').lower()
@@ -71,7 +94,7 @@ def optimize_image_as_quant_png(file, input_path, output_path, options = []):
 
 	options_str = options_str.replace('= ', '=')
 	options_str = options_str.strip(' ')
-	print(options_str)
+	print('quantpng.exe ' + options_str)
 
 	srcfile = os.path.join(input_path, file)
 	options_as_filename = options_str.replace('-','_').replace(' ','_').replace('__','_').replace('__','_').lower()
@@ -174,9 +197,9 @@ def main():
 			candidates = []
 
 			for optimized_file in optimized_files:
-				# diff_sum = mse_compare(os.path.join(input_folder, file_entry), optimized_file)
-				diff_sum = ssim_compare(os.path.join(input_folder, file_entry), optimized_file)
-				# diff_sum = naive_diff_compare(os.path.join(input_folder, file_entry), optimized_file)
+				# diff_sum = mse_compare(os.path.join(input_folder, file_entry), optimized_file, False)
+				diff_sum = ssim_compare(os.path.join(input_folder, file_entry), optimized_file, False)
+				# diff_sum = naive_diff_compare(os.path.join(input_folder, file_entry), optimized_file, False)
 				difference_scores.append(diff_sum)
 				size_ratio = os.path.getsize(os.path.join(input_folder, file_entry)) / os.path.getsize(optimized_file)
 				print(optimized_file + ", diff = " + str(diff_sum)[0:6] + ", size ratio = " + str(size_ratio)[0:6])
@@ -194,7 +217,7 @@ def main():
 			print("Best difference/compression ratio found:")
 			print(best_candidate)
 
-			shutil.copy(best_candidate["filename"], os.path.join(output_folder, file_entry))
+			shutil.copy(best_candidate["filename"], os.path.join(output_folder, os.path.splitext(file_entry)[0] + os.path.splitext(best_candidate["filename"])[1]))
 
 
 main()
