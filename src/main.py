@@ -262,6 +262,7 @@ def main(aggressivity):
 	for file_idx, file_entry in enumerate(flist): # os.listdir(input_folder):
 		if file_entry.endswith(input_file_ext):
 			print(file_entry)
+			original_file_size = os.path.getsize(os.path.join(input_folder, file_entry))
 			optimized_files = optimize_as_indexed_colors(file_entry, input_folder, tmp_folder)
 			# optimized_files = optimize_image_as_mozilla_jpeg(file_entry, input_folder, tmp_folder)
 
@@ -269,42 +270,43 @@ def main(aggressivity):
 			candidates = []
 
 			for optimized_file in optimized_files:
-				diff_dict = {"diff_sum_mse": 0.0, "diff_sum_ssim": 0.0, "diff_sum_naive": 0.0}
-				# diff_sum_mse = mse_compare(os.path.join(input_folder, file_entry), optimized_file, False)
-				# diff_sum_ssim = ssim_compare(os.path.join(input_folder, file_entry), optimized_file, False)
-				# diff_sum_naive = naive_diff_compare(os.path.join(input_folder, file_entry), optimized_file, False)
-				t_diff_sum_mse = threading.Thread(target=mse_compare, args=(os.path.join(input_folder, file_entry), optimized_file, False, diff_dict))
-				t_diff_sum_ssim = threading.Thread(target=ssim_compare, args=(os.path.join(input_folder, file_entry), optimized_file, False, diff_dict))
-				t_diff_sum_naive = threading.Thread(target=naive_diff_compare, args=(os.path.join(input_folder, file_entry), optimized_file, False, diff_dict))
-
-				# t_diff_sum_ssim, clock = 1.432041893000001
-				# t_diff_sum_mse, clock = 1.1640078779999996
-				# t_diff_sum_naive, clock = 0.5053621260000014
-
-				t = time.process_time()
-				t_diff_sum_ssim.start()
-				t_diff_sum_mse.start()
-				t_diff_sum_naive.start()
-
-				t_diff_sum_naive.join()
-				t_diff_sum_mse.join()
-				t_diff_sum_ssim.join()
-				t = time.process_time() - t
-				print("diff took " + str(t) + " s.")
-
-				diff_sum_mse = diff_dict["diff_sum_mse"]
-				diff_sum_ssim = diff_dict["diff_sum_ssim"]
-				diff_sum_naive = diff_dict["diff_sum_naive"]
-
-				diff_sum = (diff_sum_mse + diff_sum_ssim + diff_sum_naive) / 3.0
-
-				# diff_sum = difference with the original (less is better)
-				# ratio = difference * size (less is better)
-				difference_scores.append(diff_sum)
 				optimized_file_size = os.path.getsize(optimized_file)
-				size_ratio = os.path.getsize(os.path.join(input_folder, file_entry)) * optimized_file_size
-				print(optimized_file + ", diff = " + str(diff_sum)[0:6] + ", size ratio = " + str(size_ratio)[0:6])
-				candidates.append({"filename": optimized_file, "difference": diff_sum, "compression": size_ratio, "size": optimized_file_size})
+				if optimized_file_size < original_file_size:
+					diff_dict = {"diff_sum_mse": 0.0, "diff_sum_ssim": 0.0, "diff_sum_naive": 0.0}
+					# diff_sum_mse = mse_compare(os.path.join(input_folder, file_entry), optimized_file, False)
+					# diff_sum_ssim = ssim_compare(os.path.join(input_folder, file_entry), optimized_file, False)
+					# diff_sum_naive = naive_diff_compare(os.path.join(input_folder, file_entry), optimized_file, False)
+					t_diff_sum_mse = threading.Thread(target=mse_compare, args=(os.path.join(input_folder, file_entry), optimized_file, False, diff_dict))
+					t_diff_sum_ssim = threading.Thread(target=ssim_compare, args=(os.path.join(input_folder, file_entry), optimized_file, False, diff_dict))
+					t_diff_sum_naive = threading.Thread(target=naive_diff_compare, args=(os.path.join(input_folder, file_entry), optimized_file, False, diff_dict))
+
+					# t_diff_sum_ssim, clock = 1.432041893000001
+					# t_diff_sum_mse, clock = 1.1640078779999996
+					# t_diff_sum_naive, clock = 0.5053621260000014
+
+					t = time.process_time()
+					t_diff_sum_ssim.start()
+					t_diff_sum_mse.start()
+					t_diff_sum_naive.start()
+
+					t_diff_sum_naive.join()
+					t_diff_sum_mse.join()
+					t_diff_sum_ssim.join()
+					t = time.process_time() - t
+					print("diff took " + str(t) + " s.")
+
+					diff_sum_mse = diff_dict["diff_sum_mse"]
+					diff_sum_ssim = diff_dict["diff_sum_ssim"]
+					diff_sum_naive = diff_dict["diff_sum_naive"]
+
+					diff_sum = (diff_sum_mse + diff_sum_ssim + diff_sum_naive) / 3.0
+
+					# diff_sum = difference with the original (less is better)
+					# ratio = difference * size (less is better)
+					difference_scores.append(diff_sum)
+					size_ratio = os.path.getsize(os.path.join(input_folder, file_entry)) * optimized_file_size
+					print(optimized_file + ", diff = " + str(diff_sum)[0:6] + ", size ratio = " + str(size_ratio)[0:6])
+					candidates.append({"filename": optimized_file, "difference": diff_sum, "compression": size_ratio, "size": optimized_file_size})
 				
 			median_score = statistics.median(difference_scores)
 			min_score = min(difference_scores)
@@ -329,22 +331,24 @@ def main(aggressivity):
 			# 		best_candidate = candidate
 
 			# search for the candidate with the best ratio
-			best_candidate = quality_candidates[0]
-			for candidate in quality_candidates:
-				if candidate["compression"] < best_candidate["compression"]:
-					best_candidate = candidate
+			if (len(quality_candidates) > 0):
+				best_candidate = quality_candidates[0]
+				for candidate in quality_candidates:
+					if candidate["compression"] < best_candidate["compression"]:
+						best_candidate = candidate
 
-			# best_candidate = None
-			# # best_candidate = candidates[0]
-			# for candidate in candidates:
-			# 	if candidate["difference"] <= median_score:
-			# 		if candidate["compression"] > best_candidate["compression"]:
-			# 			best_candidate = candidate
+				# best_candidate = None
+				# # best_candidate = candidates[0]
+				# for candidate in candidates:
+				# 	if candidate["difference"] <= median_score:
+				# 		if candidate["compression"] > best_candidate["compression"]:
+				# 			best_candidate = candidate
 
-			print("Best difference/compression ratio found:")
-			print(best_candidate)
+				print("Best difference/compression ratio found:")
+				print(best_candidate)
 
-			shutil.copy(best_candidate["filename"], os.path.join(output_folder, os.path.splitext(file_entry)[0] + os.path.splitext(best_candidate["filename"])[1]))
-
+				shutil.copy(best_candidate["filename"], os.path.join(output_folder, os.path.splitext(file_entry)[0] + os.path.splitext(best_candidate["filename"])[1]))
+			else:
+				print("Cannot find a best ratio/compression!")
 
 main(aggressivity)
